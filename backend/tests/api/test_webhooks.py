@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from app.core.config import get_settings
-from app.services.webhooks import build_whatsapp_payload, sign
+from django.conf import settings
+from intelliflow.integrations.webhooks import build_whatsapp_payload, sign
 from tests.api.test_automations import ORDER_SAMPLE, generated_order_automation
 from tests.conftest import Api, connect_sandbox
 
@@ -31,7 +31,7 @@ def post_whatsapp(
     )
     headers = {"Content-Type": "application/json"}
     if signature == "valid":
-        headers["X-Hub-Signature-256"] = sign(raw, get_settings().whatsapp_app_secret)
+        headers["X-Hub-Signature-256"] = sign(raw, settings.WHATSAPP_APP_SECRET)
     elif signature:
         headers["X-Hub-Signature-256"] = signature
     return api.client.post("/api/v1/webhooks/whatsapp", content=raw, headers=headers)
@@ -48,7 +48,7 @@ def test_meta_verification_handshake(client) -> None:  # type: ignore[no-untyped
         "/api/v1/webhooks/whatsapp",
         params={
             "hub.mode": "subscribe",
-            "hub.verify_token": get_settings().whatsapp_verify_token,
+            "hub.verify_token": settings.WHATSAPP_VERIFY_TOKEN,
             "hub.challenge": "42",
         },
     )
@@ -129,14 +129,14 @@ def test_duplicate_webhooks_start_one_run(owner: Api) -> None:
     assert len(owner.get("/runs").json()) == 1  # REQ-WE-3
 
 
-def test_staff_can_decide_approvals_but_not_change_automations(owner: Api, client, db) -> None:  # type: ignore[no-untyped-def]
+def test_staff_can_decide_approvals_but_not_change_automations(owner: Api, client) -> None:  # type: ignore[no-untyped-def]
     from tests.conftest import latest_link, register_and_login
 
     automation = active_order_automation(owner)
     post_whatsapp(owner, whatsapp_phone_id(owner), ORDER, "wamid.STAFF")
     owner.post("/invitations", {"email": "staff2@example.com"})
-    invite = latest_link(db, "staff2@example.com", "invite?token")
-    token = register_and_login(client, db, email="staff2@example.com")
+    invite = latest_link("staff2@example.com", "invite?token")
+    token = register_and_login(client, email="staff2@example.com")
     headers = {"Authorization": f"Bearer {token}"}
     client.post("/api/v1/invitations/accept", json={"token": invite}, headers=headers)
     approval = client.get(owner.url("/approvals"), headers=headers).json()[0]

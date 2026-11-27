@@ -4,19 +4,20 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "intelliflow-backend"
-version = "0.5.0"
+version = "0.6.0"
 description = "IntelliFlow API, workflow engine and workers (AI workflow discovery and automation for SMEs)"
 readme = "README.md"
 requires-python = ">=3.12"
 # Application dependencies are pinned exactly for reproducible builds (Section 5.2).
 dependencies = [
-  "fastapi==0.165.0",
-  "uvicorn[standard]==0.54.0",
-  "pydantic[email]==2.14.4",
-  "pydantic-settings==2.16.3",
-  "python-multipart==0.0.34",
-  "sqlalchemy==2.1.9",
-  "alembic==1.20.1",
+  "django==5.2.19",
+  "djangorestframework==3.18.3",
+  "djangorestframework-simplejwt==5.5.1",
+  "drf-spectacular==0.30.0",
+  "django-cors-headers==4.9.0",
+  "whitenoise==6.12.0",
+  "gunicorn==27.0.1",
+  "dj-database-url==3.1.2",
   "psycopg[binary]==3.3.9",
   "celery[redis]==5.7.0",
   "redis==8.2.0",
@@ -26,27 +27,29 @@ dependencies = [
   "google-api-python-client==2.202.0",
   "cryptography==50.0.2",
   "argon2-cffi==25.1.0",
-  "pyjwt==2.15.1",
   "pywebpush==2.5.0",
   "anthropic==2.14.0",
-  "sentry-sdk[fastapi]==3.0.1",
+  "sentry-sdk==3.0.1",
 ]
 
 [project.optional-dependencies]
 dev = [
   "pytest==9.2.0",
   "pytest-cov==7.1.0",
+  "pytest-django==4.14.0",
   "ruff==0.17.6",
   "black==26.10.1",
   "mypy==2.4.1",
+  "django-stubs==6.1.2",
+  "djangorestframework-stubs==3.18.2",
   "locust==2.47.0",
 ]
 
 [tool.setuptools.packages.find]
-include = ["app*"]
+include = ["intelliflow*", "config*"]
 
 [tool.setuptools.package-data]
-app = ["jsonschemas/*.json"]
+intelliflow = ["jsonschemas/*.json"]
 
 # ----------------------------------------------------------------------------
 # Coding standards (Section 5.5): PEP 8 via Ruff + Black, type hints via mypy
@@ -58,51 +61,61 @@ target-version = ["py312"]
 [tool.ruff]
 line-length = 100
 target-version = "py312"
-extend-exclude = ["alembic/versions"]
+extend-exclude = ["*/migrations/*", "app", "alembic"]
 
 [tool.ruff.lint]
-select = ["E", "F", "W", "I", "N", "UP", "B", "S", "A", "C4", "SIM", "RUF", "PL"]
+select = ["E", "F", "W", "I", "N", "UP", "B", "S", "A", "C4", "SIM", "RUF", "PL", "DJ"]
 ignore = [
   "E501",    # handled by black
   "PLR0913", # services legitimately take several collaborators
   "PLR2004", # domain constants are named where it matters
   "S101",    # asserts are fine in tests
-  "B008",    # FastAPI Depends() in defaults is idiomatic
-  "RUF012",
+  "RUF012",  # DRF/Django class attributes (permission_classes, Meta.fields) are mutable by design
   "PLC0415", # deliberate local imports break import cycles in worker wiring
   "PLR0911",
   "PLR0912",
   "PLR0915",
+  "DJ001",   # nullable text columns mirror the data dictionary (NULL means "not provided")
 ]
+
+[tool.ruff.lint.isort]
+known-first-party = ["intelliflow", "config", "tests"]
 
 [tool.ruff.lint.per-file-ignores]
 "tests/**" = ["S105", "S106", "S107", "S108", "PLR0124", "N802"]
+"config/settings_test.py" = ["E402", "F403", "F405"]
 # Urdu copy legitimately uses Urdu punctuation (۔).
-"app/services/interview_agent.py" = ["RUF001"]
-"app/services/process_mapper.py" = ["RUF001"]
-"app/llm/fake_client.py" = ["RUF001", "PLW2901"]
+"intelliflow/flowmapper/interview_agent.py" = ["RUF001"]
+"intelliflow/flowmapper/process_mapper.py" = ["RUF001"]
+"intelliflow/llm/fake_client.py" = ["RUF001", "PLW2901"]
 
 [tool.mypy]
 python_version = "3.12"
-plugins = ["pydantic.mypy"]
+plugins = ["mypy_django_plugin.main", "mypy_drf_plugin.main"]
 strict_optional = true
-warn_unused_ignores = true
 warn_redundant_casts = true
 disallow_untyped_defs = true
 ignore_missing_imports = true
-exclude = ["alembic/", "tests/"]
+exclude = ["migrations/", "tests/", "^app/", "^alembic/"]
+
+[tool.django-stubs]
+django_settings_module = "config.settings"
 
 [tool.pytest.ini_options]
+DJANGO_SETTINGS_MODULE = "config.settings_test"
 testpaths = ["tests"]
 addopts = "-q --strict-markers"
 markers = [
   "postgres: needs a real PostgreSQL database (skipped on SQLite)",
 ]
-filterwarnings = ["ignore::DeprecationWarning"]
+filterwarnings = [
+  "ignore::DeprecationWarning",
+  "ignore:No directory at:UserWarning",  # static files are collected at image build time
+]
 
 [tool.coverage.run]
-source = ["app"]
-omit = ["app/cli.py", "app/worker/celery_app.py"]
+source = ["intelliflow", "config"]
+omit = ["*/migrations/*", "config/asgi.py", "config/wsgi.py", "intelliflow/core/management/*"]
 
 [tool.coverage.report]
 # NFR Testability: at least 70% coverage of the backend core.

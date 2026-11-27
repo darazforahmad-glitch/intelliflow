@@ -8,39 +8,44 @@ from decimal import Decimal
 
 import pytest
 
-from app.core.crypto import DecryptionError, TokenCipher, generate_key
-from app.core.masking import mask_pii, mask_text
-from app.core.security import create_token, decode_token, hash_password, verify_password
-from app.engine.expressions import ExpressionError, evaluate, parse_expression, render_value
-from app.seeds.templates import TEMPLATE_LIBRARY
-from app.services.opportunity_analyzer import compute_score
-from app.services.process_mapper import classify_steps, validate_process_map
-from app.services.webhooks import (
+from django.contrib.auth.hashers import check_password, make_password
+
+from intelliflow.accounts.tokens import decode_token
+from intelliflow.automations.seeds import TEMPLATE_LIBRARY
+from intelliflow.automations.validator import WorkflowValidator
+from intelliflow.core.crypto import DecryptionError, TokenCipher, generate_key
+from intelliflow.core.masking import mask_pii, mask_text
+from intelliflow.engine.expressions import ExpressionError, evaluate, parse_expression, render_value
+from intelliflow.flowmapper.process_mapper import classify_steps, validate_process_map
+from intelliflow.integrations.webhooks import (
     build_whatsapp_payload,
     extract_whatsapp_events,
     sign,
     verify_signature,
 )
-from app.services.workflow_validator import WorkflowValidator
+from intelliflow.opportunities.analyzer import compute_score
 
 
 def test_passwords_use_argon2id() -> None:
-    hashed = hash_password("Secret123")
-    assert hashed.startswith("$argon2id$")  # SEC-1
-    assert verify_password(hashed, "Secret123") and not verify_password(hashed, "secret123")
+    hashed = make_password("Secret123")  # Django's Argon2PasswordHasher
+    assert hashed.startswith("argon2$argon2id$")  # SEC-1
+    assert check_password("Secret123", hashed) and not check_password("secret123", hashed)
 
 
 def test_jwt_round_trip_and_type_check() -> None:
     import uuid
 
-    from app.core.errors import AuthenticationError
+    from rest_framework_simplejwt.tokens import AccessToken
+
+    from intelliflow.core.errors import AuthenticationError
 
     uid = uuid.uuid4()
-    token, _ = create_token(uid, 3, "access")
-    claims = decode_token(token, "access")
+    access = AccessToken()
+    access["sub"], access["tv"] = str(uid), 3
+    claims = decode_token(str(access), "access")
     assert claims.user_id == uid and claims.token_version == 3
     with pytest.raises(AuthenticationError):
-        decode_token(token, "refresh")
+        decode_token(str(access), "refresh")  # an access token is not a refresh token
 
 
 def test_aes_gcm_binds_ciphertext_to_its_row_and_rotates_keys() -> None:
@@ -188,9 +193,9 @@ def test_whatsapp_signature_and_parsing() -> None:
     assert events[0]["event_id"] == "wamid.X" and events[0]["trigger"]["name"] == "Ayesha"
 
 
-def test_daily_schedule_fires_once_per_day(db) -> None:  # type: ignore[no-untyped-def]
-    from app.models import Run
-    from app.services.scheduler_service import fire_due_schedules
+def test_daily_schedule_fires_once_per_day() -> None:
+    from intelliflow.runs.models import Run
+    from intelliflow.runs.scheduler import fire_due_schedules
     from tests.factories import (
         make_automation,
         make_connection,
@@ -198,23 +203,23 @@ def test_daily_schedule_fires_once_per_day(db) -> None:  # type: ignore[no-untyp
         template_definition,
     )
 
-    workspace, _ = make_workspace(db)
-    make_connection(db, workspace, "google_sheets")
-    make_connection(db, workspace, "gmail")
-    make_automation(db, workspace, template_definition("daily_order_summary"))
+    workspace, _ = make_workspace()
+    make_connection(workspace, "google_sheets")
+    make_connection(workspace, "gmail")
+    make_automation(workspace, template_definition("daily_order_summary"))
     at = datetime(2026, 11, 27, 16, 2, tzinfo=UTC)  # 21:02 in Asia/Karachi (UTC+5)
-    assert fire_due_schedules(db, at) == 1
-    assert fire_due_schedules(db, at + timedelta(minutes=1)) == 0  # same slot: idempotent
-    assert fire_due_schedules(db, at + timedelta(hours=2)) == 0  # outside the window
-    db.expire_all()
-    run = db.query(Run).one()
-    assert run.status.value == "succeeded"
+    assert fire_due_schedules(at) == 1
+    assert fire_due_schedules(at + timedelta(minutes=1)) == 0  # same slot: idempotent
+    assert fire_due_schedules(at + timedelta(hours=2)) == 0  # outside the window
+    run = Run.objects.get()
+    assert run.status == "succeeded"
 
 
-def test_approval_reminder_then_expiry(db) -> None:  # type: ignore[no-untyped-def]
-    from app.engine.workflow_engine import WorkflowEngine
-    from app.models import ApprovalTask, Run
-    from app.services.approval_service import process_timeouts
+def test_approval_reminder_then_expiry() -> None:
+    from intelliflow.approvals.models import ApprovalTask
+    from intelliflow.approvals.services import process_timeouts
+    from intelliflow.engine.workflow_engine import WorkflowEngine
+    from intelliflow.runs.models import Run
     from tests.factories import (
         make_automation,
         make_connection,
@@ -223,23 +228,21 @@ def test_approval_reminder_then_expiry(db) -> None:  # type: ignore[no-untyped-d
         whatsapp_trigger,
     )
 
-    workspace, _ = make_workspace(db)
-    make_connection(db, workspace, "whatsapp")
-    make_connection(db, workspace, "google_sheets")
-    automation = make_automation(db, workspace, template_definition("whatsapp_order_entry"))
-    engine = WorkflowEngine(db)
+    workspace, _ = make_workspace()
+    make_connection(workspace, "whatsapp")
+    make_connection(workspace, "google_sheets")
+    automation = make_automation(workspace, template_definition("whatsapp_order_entry"))
+    engine = WorkflowEngine()
     trigger = whatsapp_trigger()
     run = engine.create_run(
         automation, event_id="wamid.T", trigger_type="whatsapp.message_received", trigger=trigger
     )
-    db.commit()
     engine.execute(run.id)  # type: ignore[union-attr]
     now = datetime.now(UTC)
-    assert process_timeouts(db, now + timedelta(hours=3)) == (1, 0)  # REQ-AP-5: reminder after 2 h
-    assert process_timeouts(db, now + timedelta(hours=25)) == (
+    assert process_timeouts(now + timedelta(hours=3)) == (1, 0)  # REQ-AP-5: reminder after 2 h
+    assert process_timeouts(now + timedelta(hours=25)) == (
         0,
         1,
     )  # expiry after 24 h cancels the run
-    db.expire_all()
-    assert db.query(ApprovalTask).one().status.value == "expired"
-    assert db.get(Run, run.id).status.value == "cancelled"  # type: ignore[union-attr]
+    assert ApprovalTask.objects.get().status == "expired"
+    assert Run.objects.get(pk=run.id).status == "cancelled"  # type: ignore[union-attr]

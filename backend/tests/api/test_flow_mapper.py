@@ -115,13 +115,13 @@ def test_invalid_edit_rejected_with_plain_errors(owner: Api) -> None:
     assert any("start" in d for d in r.json()["error"]["details"])
 
 
-def test_staff_cannot_run_interviews(owner: Api, client, db) -> None:  # type: ignore[no-untyped-def]
+def test_staff_cannot_run_interviews(owner: Api, client) -> None:  # type: ignore[no-untyped-def]
     from tests.conftest import latest_link, register_and_login
 
     r = owner.post("/invitations", {"email": "staff@example.com"})
     assert r.status_code == 201
-    invite_token = latest_link(db, "staff@example.com", "invite?token")
-    staff_token = register_and_login(client, db, email="staff@example.com")
+    invite_token = latest_link("staff@example.com", "invite?token")
+    staff_token = register_and_login(client, email="staff@example.com")
     headers = {"Authorization": f"Bearer {staff_token}"}
     assert (
         client.post(

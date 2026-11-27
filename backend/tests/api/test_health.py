@@ -6,7 +6,8 @@ from __future__ import annotations
 import logging
 
 import pytest
-from fastapi.testclient import TestClient
+
+from tests.conftest import Client
 
 
 def _logged_paths(caplog: pytest.LogCaptureFixture) -> list[str]:
@@ -18,7 +19,7 @@ def _logged_paths(caplog: pytest.LogCaptureFixture) -> list[str]:
 
 
 def test_successful_probes_are_not_logged(
-    client: TestClient, caplog: pytest.LogCaptureFixture
+    client: Client, caplog: pytest.LogCaptureFixture
 ) -> None:
     with caplog.at_level(logging.INFO, logger="intelliflow.api"):
         assert client.get("/healthz").json() == {"status": "ok"}
@@ -31,12 +32,13 @@ def test_successful_probes_are_not_logged(
 
 
 def test_failing_probe_is_logged(
-    client: TestClient, caplog: pytest.LogCaptureFixture, monkeypatch: pytest.MonkeyPatch
+    client: Client, caplog: pytest.LogCaptureFixture, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    def database_down() -> None:
-        raise RuntimeError("database down")
+    class DatabaseDown:
+        def cursor(self) -> None:
+            raise RuntimeError("database down")
 
-    monkeypatch.setattr("app.main.get_database", database_down)
+    monkeypatch.setattr("intelliflow.core.api.views.connection", DatabaseDown())
     with caplog.at_level(logging.INFO, logger="intelliflow.api"):
         ready = client.get("/readyz")
 

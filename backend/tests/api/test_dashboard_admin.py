@@ -4,10 +4,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from sqlalchemy import select
-from sqlalchemy.orm import Session
 
-from app.models import User
+from intelliflow.accounts.models import User
 from tests.api.test_webhooks import ORDER, active_order_automation, post_whatsapp, whatsapp_phone_id
 from tests.conftest import Api, register_and_login
 
@@ -72,11 +70,9 @@ def test_push_subscription_lifecycle(owner: Api) -> None:
     assert owner.client.get("/api/v1/push/config", headers=owner.headers).json()["enabled"] is False
 
 
-def admin_headers(client, db: Session) -> dict[str, str]:  # type: ignore[no-untyped-def]
-    token = register_and_login(client, db, email="admin@intelliflow.pk")
-    user = db.scalars(select(User).where(User.email == "admin@intelliflow.pk")).one()
-    user.is_platform_admin = True
-    db.commit()
+def admin_headers(client) -> dict[str, str]:  # type: ignore[no-untyped-def]
+    token = register_and_login(client, email="admin@intelliflow.pk")
+    User.objects.filter(email="admin@intelliflow.pk").update(is_platform_admin=True)
     return {"Authorization": f"Bearer {token}"}
 
 
@@ -84,10 +80,10 @@ def test_admin_requires_platform_admin(owner: Api) -> None:
     assert owner.client.get("/api/v1/admin/metrics", headers=owner.headers).status_code == 403
 
 
-def test_admin_metrics_and_suspension(owner: Api, client, db: Session) -> None:  # type: ignore[no-untyped-def]
+def test_admin_metrics_and_suspension(owner: Api, client) -> None:  # type: ignore[no-untyped-def]
     active_order_automation(owner)
     complete_one_order(owner, "wamid.ADMIN1")
-    headers = admin_headers(client, db)
+    headers = admin_headers(client)
     metrics = client.get("/api/v1/admin/metrics", headers=headers).json()
     assert metrics["workspaces"]["active"] == 1 and metrics["active_automations"] == 1
     assert metrics["llm_month"]["calls"] > 0  # REQ-PA-2: LLM usage is metered
@@ -111,8 +107,8 @@ def test_admin_metrics_and_suspension(owner: Api, client, db: Session) -> None: 
     }
 
 
-def test_ai_credit_limit_pauses_ai_steps(owner: Api, client, db: Session) -> None:  # type: ignore[no-untyped-def]
-    headers = admin_headers(client, db)
+def test_ai_credit_limit_pauses_ai_steps(owner: Api, client) -> None:  # type: ignore[no-untyped-def]
+    headers = admin_headers(client)
     client.patch(
         f"/api/v1/admin/workspaces/{owner.workspace_id}/limits",
         json={"ai_credit_limit": 0},
@@ -124,8 +120,8 @@ def test_ai_credit_limit_pauses_ai_steps(owner: Api, client, db: Session) -> Non
     )  # BR-6 / REQ-PA-3
 
 
-def test_admin_template_versioning(client, db: Session) -> None:  # type: ignore[no-untyped-def]
-    headers = admin_headers(client, db)
+def test_admin_template_versioning(client) -> None:  # type: ignore[no-untyped-def]
+    headers = admin_headers(client)
     templates = client.get("/api/v1/admin/templates", headers=headers).json()
     base = next(t for t in templates if t["code"] == "order_confirmation_reply")
     body: dict[str, Any] = {
@@ -158,7 +154,7 @@ def test_admin_template_versioning(client, db: Session) -> None:  # type: ignore
     )
 
 
-def test_dev_outbox_lists_emails(client, db: Session) -> None:  # type: ignore[no-untyped-def]
+def test_dev_outbox_lists_emails(client) -> None:  # type: ignore[no-untyped-def]
     client.post(
         "/api/v1/auth/register",
         json={"full_name": "Dev Test", "email": "dev@example.com", "password": "Secret123"},

@@ -2,13 +2,11 @@
 
 from __future__ import annotations
 
-from fastapi.testclient import TestClient
-from sqlalchemy.orm import Session
 
-from tests.conftest import latest_link, register_and_login
+from tests.conftest import Client, latest_link, register_and_login
 
 
-def _register(client: TestClient, email: str, password: str = "Secret123") -> None:
+def _register(client: Client, email: str, password: str = "Secret123") -> None:
     r = client.post(
         "/api/v1/auth/register",
         json={"full_name": "Usman Ali", "email": email, "password": password},
@@ -16,7 +14,7 @@ def _register(client: TestClient, email: str, password: str = "Secret123") -> No
     assert r.status_code == 201, r.text
 
 
-def test_cannot_sign_in_before_email_verification(client: TestClient, db: Session) -> None:
+def test_cannot_sign_in_before_email_verification(client: Client) -> None:
     _register(client, "usman@example.com")
     r = client.post(
         "/api/v1/auth/login", json={"email": "usman@example.com", "password": "Secret123"}
@@ -25,15 +23,15 @@ def test_cannot_sign_in_before_email_verification(client: TestClient, db: Sessio
     assert r.json()["error"]["code"] == "email_not_verified"
 
 
-def test_full_registration_flow_and_me(client: TestClient, db: Session) -> None:
-    token = register_and_login(client, db, email="Hadia@Example.com")
+def test_full_registration_flow_and_me(client: Client) -> None:
+    token = register_and_login(client, email="Hadia@Example.com")
     me = client.get("/api/v1/auth/me", headers={"Authorization": f"Bearer {token}"}).json()
     assert me["email"] == "hadia@example.com"  # normalised
     assert me["email_verified"] is True
     assert me["memberships"] == []
 
 
-def test_duplicate_email_rejected(client: TestClient) -> None:
+def test_duplicate_email_rejected(client: Client) -> None:
     _register(client, "dup@example.com")
     r = client.post(
         "/api/v1/auth/register",
@@ -43,7 +41,7 @@ def test_duplicate_email_rejected(client: TestClient) -> None:
     assert r.json()["error"]["hint"]
 
 
-def test_weak_password_rejected_with_plain_message(client: TestClient) -> None:
+def test_weak_password_rejected_with_plain_message(client: Client) -> None:
     r = client.post(
         "/api/v1/auth/register",
         json={"full_name": "Weak", "email": "weak@example.com", "password": "password"},
@@ -52,8 +50,8 @@ def test_weak_password_rejected_with_plain_message(client: TestClient) -> None:
     assert "letter and one number" in r.json()["error"]["message"]
 
 
-def test_lockout_after_five_failed_attempts(client: TestClient, db: Session) -> None:
-    register_and_login(client, db, email="lock@example.com")
+def test_lockout_after_five_failed_attempts(client: Client) -> None:
+    register_and_login(client, email="lock@example.com")
     for _ in range(5):
         r = client.post(
             "/api/v1/auth/login", json={"email": "lock@example.com", "password": "Wrong1234"}
@@ -67,13 +65,13 @@ def test_lockout_after_five_failed_attempts(client: TestClient, db: Session) -> 
     assert r.json()["error"]["code"] == "account_locked"
 
 
-def test_password_reset_revokes_old_sessions(client: TestClient, db: Session) -> None:
-    old_token = register_and_login(client, db, email="reset@example.com")
+def test_password_reset_revokes_old_sessions(client: Client) -> None:
+    old_token = register_and_login(client, email="reset@example.com")
     assert (
         client.post("/api/v1/auth/forgot-password", json={"email": "reset@example.com"}).status_code
         == 202
     )
-    reset_token = latest_link(db, "reset@example.com", "reset-password")
+    reset_token = latest_link("reset@example.com", "reset-password")
     r = client.post(
         "/api/v1/auth/reset-password", json={"token": reset_token, "new_password": "NewSecret456"}
     )
@@ -97,7 +95,7 @@ def test_password_reset_revokes_old_sessions(client: TestClient, db: Session) ->
     )
 
 
-def test_unknown_email_does_not_leak(client: TestClient) -> None:
+def test_unknown_email_does_not_leak(client: Client) -> None:
     r = client.post("/api/v1/auth/forgot-password", json={"email": "nobody@example.com"})
     assert r.status_code == 202
     r = client.post(
@@ -106,8 +104,8 @@ def test_unknown_email_does_not_leak(client: TestClient) -> None:
     assert r.json()["error"]["code"] == "invalid_credentials"
 
 
-def test_refresh_token_flow(client: TestClient, db: Session) -> None:
-    register_and_login(client, db, email="refresh@example.com")
+def test_refresh_token_flow(client: Client) -> None:
+    register_and_login(client, email="refresh@example.com")
     pair = client.post(
         "/api/v1/auth/login", json={"email": "refresh@example.com", "password": "Secret123"}
     ).json()

@@ -1,53 +1,27 @@
 """Shared fixtures. Tests run on SQLite by default (fast) or on PostgreSQL when
 TEST_DATABASE_URL is set (CI does this), with Celery in eager mode and the
-FakeLLMClient, so the whole suite is deterministic and costs nothing."""
+FakeLLMClient (config/settings_test.py), so the whole suite is deterministic and free.
+
+Every test is transactional: work really commits, so `transaction.on_commit` hooks
+(Celery dispatch, live events) run exactly as in production."""
 
 from __future__ import annotations
 
-import os
+import json as jsonlib
 import uuid
 from collections.abc import Iterator
 from typing import Any
 
 import pytest
+from rest_framework.test import APIClient
 
-os.environ.setdefault("ENVIRONMENT", "test")
-os.environ["LLM_PROVIDER"] = "fake"
-os.environ["CELERY_TASK_ALWAYS_EAGER"] = "true"
-os.environ["EMAIL_BACKEND"] = "console"
-os.environ["REDIS_URL"] = ""
-os.environ["DATABASE_URL"] = os.environ.get("TEST_DATABASE_URL", "sqlite+pysqlite:///:memory:")
-os.environ["LOGIN_RATE_LIMIT_PER_MINUTE"] = "1000"
-
-from fastapi.testclient import TestClient
-from sqlalchemy import select
-from sqlalchemy.orm import Session
-
-from app.core.config import reset_settings_cache
-
-reset_settings_cache()
-
-from app.core.database import get_database, init_database  # noqa: E402
-from app.core.kv import MemoryStore, get_kv, reset_kv  # noqa: E402
-from app.models import Base, EmailMessage  # noqa: E402
-
-
-@pytest.fixture(scope="session", autouse=True)
-def _database() -> Iterator[None]:
-    db = init_database(os.environ["DATABASE_URL"])
-    Base.metadata.drop_all(db.engine)
-    Base.metadata.create_all(db.engine)
-    yield
-    Base.metadata.drop_all(db.engine)
+from intelliflow.core.kv import MemoryStore, get_kv, reset_kv
+from intelliflow.notifications.models import EmailMessage
 
 
 @pytest.fixture(autouse=True)
-def _clean_state() -> Iterator[None]:
+def _database(transactional_db: None) -> Iterator[None]:
     yield
-    engine = get_database().engine
-    with engine.begin() as conn:
-        for table in reversed(Base.metadata.sorted_tables):
-            conn.execute(table.delete())
     kv = get_kv()
     if isinstance(kv, MemoryStore):
         kv.clear()
@@ -58,31 +32,101 @@ def _memory_kv() -> None:
     reset_kv()
 
 
-@pytest.fixture
-def db() -> Iterator[Session]:
-    session = get_database().session_factory()
-    try:
-        yield session
-    finally:
-        session.close()
+@pytest.fixture(autouse=True)
+def _templates(_database: None) -> None:
+    from intelliflow.automations.seeds import seed_templates
+
+    seed_templates()
+
+
+class Response:
+    """httpx-style view of a Django test response (status_code, json(), text, headers)."""
+
+    def __init__(self, response: Any) -> None:
+        self._response = response
+        self.status_code: int = response.status_code
+        self.headers = response.headers
+
+    @property
+    def content(self) -> bytes:
+        if getattr(self._response, "streaming", False):
+            return b"".join(self._response.streaming_content)
+        return bytes(self._response.content)
+
+    @property
+    def text(self) -> str:
+        return self.content.decode()
+
+    def json(self) -> Any:
+        return jsonlib.loads(self.content or b"null")
+
+
+class Client:
+    """Small wrapper so tests read like HTTP calls: client.post(url, json=..., headers=...)."""
+
+    def __init__(self) -> None:
+        self.api = APIClient()
+
+    @staticmethod
+    def _extra(headers: dict[str, str] | None) -> dict[str, str]:
+        extra = {}
+        for key, value in (headers or {}).items():
+            name = key.upper().replace("-", "_")
+            extra[name if name == "CONTENT_TYPE" else f"HTTP_{name}"] = value
+        return extra
+
+    def request(
+        self,
+        method: str,
+        url: str,
+        *,
+        json: Any = None,
+        params: dict[str, Any] | None = None,
+        headers: dict[str, str] | None = None,
+        content: bytes | str | None = None,
+        data: dict[str, Any] | None = None,
+    ) -> Response:
+        call = getattr(self.api, method.lower())
+        extra = self._extra(headers)
+        content_type = extra.pop("CONTENT_TYPE", None)
+        if params:
+            query = "&".join(f"{k}={v}" for k, v in params.items())
+            url = f"{url}{'&' if '?' in url else '?'}{query}"
+        if content is not None:
+            body = content.encode() if isinstance(content, str) else content
+            return Response(
+                call(url, body, content_type=content_type or "application/octet-stream", **extra)
+            )
+        if data is not None:
+            return Response(call(url, data, **extra))  # form-encoded
+        if json is not None:
+            return Response(call(url, json, format="json", **extra))
+        return Response(call(url, **extra))
+
+    def get(self, url: str, **kw: Any) -> Response:
+        return self.request("GET", url, **kw)
+
+    def post(self, url: str, **kw: Any) -> Response:
+        return self.request("POST", url, **kw)
+
+    def put(self, url: str, **kw: Any) -> Response:
+        return self.request("PUT", url, **kw)
+
+    def patch(self, url: str, **kw: Any) -> Response:
+        return self.request("PATCH", url, **kw)
+
+    def delete(self, url: str, **kw: Any) -> Response:
+        return self.request("DELETE", url, **kw)
 
 
 @pytest.fixture
-def client() -> Iterator[TestClient]:
-    from app.main import create_app
-
-    with TestClient(create_app()) as test_client:
-        yield test_client
+def client() -> Client:
+    return Client()
 
 
-def latest_link(db: Session, to: str, marker: str) -> str:
+def latest_link(to: str, marker: str) -> str:
     """Pull the one-time token out of the newest outbox e-mail (the dev 'inbox')."""
-    db.expire_all()
-    message = db.scalars(
-        select(EmailMessage)
-        .where(EmailMessage.to_address == to.lower())
-        .order_by(EmailMessage.created_at.desc())
-    ).first()
+    message = EmailMessage.objects.filter(to_address=to.lower()).order_by("-created_at").first()
     assert message is not None, f"no e-mail sent to {to}"
     for word in message.body_text.split():
         if marker in word:
@@ -91,9 +135,9 @@ def latest_link(db: Session, to: str, marker: str) -> str:
 
 
 class Api:
-    """Tiny helper around TestClient that signs requests as one user."""
+    """Tiny helper that signs requests as one user inside one workspace."""
 
-    def __init__(self, client: TestClient, token: str, workspace_id: str) -> None:
+    def __init__(self, client: Client, token: str, workspace_id: str) -> None:
         self.client = client
         self.token = token
         self.workspace_id = workspace_id
@@ -105,25 +149,23 @@ class Api:
     def url(self, path: str) -> str:
         return f"/api/v1/workspaces/{self.workspace_id}{path}"
 
-    def get(self, path: str, **kw: Any) -> Any:
+    def get(self, path: str, **kw: Any) -> Response:
         return self.client.get(self.url(path), headers=self.headers, **kw)
 
-    def post(self, path: str, json: Any = None, **kw: Any) -> Any:
+    def post(self, path: str, json: Any = None, **kw: Any) -> Response:
         return self.client.post(self.url(path), json=json, headers=self.headers, **kw)
 
-    def put(self, path: str, json: Any = None, **kw: Any) -> Any:
+    def put(self, path: str, json: Any = None, **kw: Any) -> Response:
         return self.client.put(self.url(path), json=json, headers=self.headers, **kw)
 
-    def patch(self, path: str, json: Any = None, **kw: Any) -> Any:
+    def patch(self, path: str, json: Any = None, **kw: Any) -> Response:
         return self.client.patch(self.url(path), json=json, headers=self.headers, **kw)
 
-    def delete(self, path: str, **kw: Any) -> Any:
+    def delete(self, path: str, **kw: Any) -> Response:
         return self.client.delete(self.url(path), headers=self.headers, **kw)
 
 
-def register_and_login(
-    client: TestClient, db: Session, email: str | None = None, password: str = "Secret123"
-) -> str:
+def register_and_login(client: Client, email: str | None = None, password: str = "Secret123") -> str:
     email = email or f"owner-{uuid.uuid4().hex[:8]}@example.com"
     r = client.post(
         "/api/v1/auth/register",
@@ -135,7 +177,7 @@ def register_and_login(
         },
     )
     assert r.status_code == 201, r.text
-    token = latest_link(db, email, "verify-email")
+    token = latest_link(email, "verify-email")
     assert client.post("/api/v1/auth/verify-email", json={"token": token}).status_code == 200
     r = client.post("/api/v1/auth/login", json={"email": email, "password": password})
     assert r.status_code == 200, r.text
@@ -143,8 +185,8 @@ def register_and_login(
 
 
 @pytest.fixture
-def owner(client: TestClient, db: Session) -> Api:
-    token = register_and_login(client, db)
+def owner(client: Client) -> Api:
+    token = register_and_login(client)
     r = client.post(
         "/api/v1/workspaces",
         json={
@@ -156,18 +198,6 @@ def owner(client: TestClient, db: Session) -> Api:
     )
     assert r.status_code == 201, r.text
     return Api(client, token, r.json()["id"])
-
-
-@pytest.fixture(autouse=True)
-def _templates(_database: None) -> None:
-    from app.core.database import new_session
-    from app.seeds.templates import seed_templates
-
-    session = new_session()
-    try:
-        seed_templates(session)
-    finally:
-        session.close()
 
 
 ORDER_ANSWERS = [
@@ -206,7 +236,7 @@ def connect_sandbox(api: Api, *providers: str) -> dict[str, dict[str, Any]]:
 
 @pytest.fixture
 def llm_override() -> Iterator[Any]:
-    from app.llm import set_llm_client
+    from intelliflow.llm import set_llm_client
 
     holder: dict[str, Any] = {}
 
