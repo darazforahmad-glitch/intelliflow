@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from typing import Any
 
-from intelliflow.integrations.connectors.registry import operation_spec
 from intelliflow.engine.blocks.base import (
     Block,
     BlockResult,
@@ -13,6 +12,7 @@ from intelliflow.engine.blocks.base import (
     RunContext,
 )
 from intelliflow.engine.errors import PermanentBlockError
+from intelliflow.integrations.connectors.registry import operation_spec
 
 
 class ActionBlock(Block):

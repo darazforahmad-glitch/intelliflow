@@ -6,6 +6,14 @@ import uuid
 from datetime import UTC, datetime
 from typing import Any
 
+from django.conf import settings
+
+from intelliflow.accounts.models import User
+from intelliflow.automations.models import Automation
+from intelliflow.core.crypto import get_cipher
+from intelliflow.core.enums import ConnectionStatus, MembershipRole, MembershipStatus
+from intelliflow.core.kv import get_kv
+from intelliflow.engine.errors import ConnectionUnavailableError, PermanentBlockError
 from intelliflow.integrations.connectors.base import (
     Connector,
     ConnectorContext,
@@ -21,15 +29,8 @@ from intelliflow.integrations.connectors.sheet_store import (
 from intelliflow.integrations.connectors.sheets import SheetsConnector
 from intelliflow.integrations.connectors.webform import WebformConnector
 from intelliflow.integrations.connectors.whatsapp import WhatsAppConnector
-from django.conf import settings
-from intelliflow.core.crypto import get_cipher
-from intelliflow.core.kv import get_kv
-from intelliflow.engine.errors import ConnectionUnavailableError, PermanentBlockError
-from intelliflow.accounts.models import User
-from intelliflow.automations.models import Automation
 from intelliflow.integrations.models import Connection, SandboxRecord
 from intelliflow.workspaces.models import Workspace
-from intelliflow.core.enums import ConnectionStatus, MembershipRole, MembershipStatus
 
 CONNECTOR_CLASSES: dict[str, type[Connector]] = {
     "whatsapp": WhatsAppConnector,

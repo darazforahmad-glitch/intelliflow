@@ -14,6 +14,8 @@ from datetime import UTC, datetime
 from typing import Any
 
 from django.conf import settings
+
+from intelliflow.core.enums import ConnectionProvider, ConnectionStatus
 from intelliflow.core.errors import (
     AuthenticationError,
     NotFoundError,
@@ -23,7 +25,6 @@ from intelliflow.core.errors import (
 from intelliflow.core.kv import get_kv
 from intelliflow.core.security import constant_time_equals
 from intelliflow.integrations.models import Connection
-from intelliflow.core.enums import ConnectionProvider, ConnectionStatus
 from intelliflow.integrations.webhooks import extract_whatsapp_events, verify_signature
 
 logger = logging.getLogger(__name__)
@@ -54,8 +55,8 @@ def ingest_whatsapp(raw_body: bytes, signature: str | None) -> dict[str, int]:
 
 
 def _webform_connection(connection_id: uuid.UUID, token: str) -> Connection:
-    from intelliflow.integrations.connectors.registry import connection_aad
     from intelliflow.core.crypto import get_cipher
+    from intelliflow.integrations.connectors.registry import connection_aad
 
     connection = Connection.objects.filter(
         id=connection_id,

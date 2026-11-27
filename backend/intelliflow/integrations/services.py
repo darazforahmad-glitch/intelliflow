@@ -12,6 +12,22 @@ from typing import Any
 from django.conf import settings
 from django.db import transaction
 
+from intelliflow.accounts.models import User
+from intelliflow.audit import services as audit_service
+from intelliflow.automations.builder import providers_used
+from intelliflow.automations.models import Automation
+from intelliflow.core.crypto import get_cipher
+from intelliflow.core.enums import (
+    AutomationStatus,
+    ConnectionMode,
+    ConnectionProvider,
+    ConnectionStatus,
+    MembershipRole,
+)
+from intelliflow.core.errors import ConflictError, NotFoundError, ValidationFailedError
+from intelliflow.core.models import utcnow
+from intelliflow.core.security import create_signed_state, decode_signed_state
+from intelliflow.engine.errors import BlockError
 from intelliflow.integrations.connectors.google_auth import (
     SCOPES,
     authorization_url,
@@ -23,26 +39,10 @@ from intelliflow.integrations.connectors.registry import (
     ConnectorFactory,
     connection_aad,
 )
-from intelliflow.core.crypto import get_cipher
-from intelliflow.core.errors import ConflictError, NotFoundError, ValidationFailedError
-from intelliflow.core.security import create_signed_state, decode_signed_state
-from intelliflow.engine.errors import BlockError
-from intelliflow.accounts.models import User
-from intelliflow.automations.models import Automation
 from intelliflow.integrations.models import Connection, SandboxRecord
-from intelliflow.workspaces.models import Workspace
-from intelliflow.core.models import utcnow
-from intelliflow.core.enums import (
-    AutomationStatus,
-    ConnectionMode,
-    ConnectionProvider,
-    ConnectionStatus,
-    MembershipRole,
-)
-from intelliflow.audit import services as audit_service
 from intelliflow.notifications import event_bus
-from intelliflow.automations.builder import providers_used
 from intelliflow.notifications.services import notify, workspace_members
+from intelliflow.workspaces.models import Workspace
 
 logger = logging.getLogger(__name__)
 
@@ -383,8 +383,8 @@ def refresh_expiring_tokens() -> int:
 
 
 def poll_gmail_connections() -> int:
-    from intelliflow.integrations.connectors.gmail import GmailConnector, fetch_new_messages
     from intelliflow.core.kv import get_kv
+    from intelliflow.integrations.connectors.gmail import GmailConnector, fetch_new_messages
     from intelliflow.runs.event_router import route_trigger
 
     count = 0

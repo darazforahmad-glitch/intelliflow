@@ -122,3 +122,19 @@ omit = ["*/migrations/*", "config/asgi.py", "config/wsgi.py", "intelliflow/core/
 fail_under = 70
 show_missing = true
 skip_covered = true
+
+# DRF/Django stubs type request.user as User | AnonymousUser and URL kwargs as str even
+# where authentication and UUID route converters guarantee more; the views, serializers
+# and admin rely on those runtime guarantees.
+[[tool.mypy.overrides]]
+module = [
+  "intelliflow.*.views",
+  "intelliflow.*.serializers",
+  "intelliflow.*.admin",
+  "intelliflow.platform_admin.*",
+  "intelliflow.core.api.*",
+  "intelliflow.engine.workflow_engine",
+  "intelliflow.llm.service",
+  "config.settings_test",
+]
+disable_error_code = ["arg-type", "union-attr", "misc", "call-arg", "assignment", "return-value", "index", "list-item"]

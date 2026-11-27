@@ -165,7 +165,9 @@ class Api:
         return self.client.delete(self.url(path), headers=self.headers, **kw)
 
 
-def register_and_login(client: Client, email: str | None = None, password: str = "Secret123") -> str:
+def register_and_login(
+    client: Client, email: str | None = None, password: str = "Secret123"
+) -> str:
     email = email or f"owner-{uuid.uuid4().hex[:8]}@example.com"
     r = client.post(
         "/api/v1/auth/register",

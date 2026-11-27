@@ -17,7 +17,6 @@ from typing import Any
 
 from cryptography.exceptions import InvalidTag
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
-
 from django.conf import settings
 
 _VERSION = 1

@@ -4,7 +4,7 @@
         --users 50 --spawn-rate 10 --run-time 2m --headless
 
 Environment:
-    LOCUST_EMAIL / LOCUST_PASSWORD   an owner account (python -m app.cli demo creates one)
+    LOCUST_EMAIL / LOCUST_PASSWORD   an owner account (python manage.py demo creates one)
     LOCUST_PHONE_NUMBER_ID           phone-number id of a sandbox WhatsApp connection
     WHATSAPP_APP_SECRET              the API's webhook secret (dev default otherwise)
 

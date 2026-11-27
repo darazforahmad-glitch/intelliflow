@@ -5,10 +5,10 @@ from __future__ import annotations
 import copy
 from typing import Any
 
+from intelliflow.automations.seeds import TEMPLATE_LIBRARY
 from intelliflow.llm.base import LLMTask
 from intelliflow.llm.fake_client import ScriptedLLMClient
-from intelliflow.automations.seeds import TEMPLATE_LIBRARY
-from tests.conftest import Client, Api, connect_sandbox, run_order_interview
+from tests.conftest import Api, connect_sandbox, run_order_interview
 
 ORDER_SAMPLE = {
     "text": "Mujhe 2 kurtay chahiye medium black. Address: House 12, Gulberg Lahore. Total Rs 4500",

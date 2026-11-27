@@ -15,28 +15,28 @@ from django.conf import settings
 from django.db import transaction
 from django.db.models import Max
 
-from intelliflow.integrations.connectors.registry import PROVIDER_LABELS, active_connection
+from intelliflow.accounts.models import User
+from intelliflow.approvals.services import clean_customer_approvals
+from intelliflow.audit import services as audit_service
+from intelliflow.automations.models import Automation, AutomationVersion, Template
+from intelliflow.automations.validator import TRIGGER_PROVIDERS, ValidationIssue, WorkflowValidator
+from intelliflow.core.enums import AutomationStatus, OpportunityStatus, RunStatus
 from intelliflow.core.errors import (
     ConflictError,
     NotFoundError,
     ServiceUnavailableError,
     ValidationFailedError,
 )
+from intelliflow.core.models import utcnow
 from intelliflow.engine.workflow_engine import RetryMode, WorkflowEngine
+from intelliflow.integrations.connectors.registry import PROVIDER_LABELS, active_connection
 from intelliflow.llm import prompts
 from intelliflow.llm.base import LLMError
-from intelliflow.accounts.models import User
-from intelliflow.automations.models import Automation, AutomationVersion, Template
+from intelliflow.llm.service import AIService
+from intelliflow.notifications import event_bus
 from intelliflow.opportunities.models import Opportunity
 from intelliflow.runs.models import Run
 from intelliflow.workspaces.models import Workspace
-from intelliflow.core.models import utcnow
-from intelliflow.core.enums import AutomationStatus, OpportunityStatus, RunStatus
-from intelliflow.audit import services as audit_service
-from intelliflow.notifications import event_bus
-from intelliflow.llm.service import AIService
-from intelliflow.approvals.services import clean_customer_approvals
-from intelliflow.automations.validator import TRIGGER_PROVIDERS, ValidationIssue, WorkflowValidator
 
 logger = logging.getLogger(__name__)
 MAX_ATTEMPTS = 3  # first draft + at most two automatic repairs (REQ-AB-3)

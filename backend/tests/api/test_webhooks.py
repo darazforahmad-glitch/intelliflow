@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from django.conf import settings
+
 from intelliflow.integrations.webhooks import build_whatsapp_payload, sign
 from tests.api.test_automations import ORDER_SAMPLE, generated_order_automation
 from tests.conftest import Api, connect_sandbox

@@ -21,10 +21,19 @@ from zoneinfo import ZoneInfo
 from django.conf import settings
 from django.db import IntegrityError, transaction
 
+from intelliflow.approvals.models import ApprovalTask
+from intelliflow.automations.models import Automation
 from intelliflow.core.crypto import get_cipher
+from intelliflow.core.enums import (
+    ApprovalStatus,
+    AutomationStatus,
+    MembershipRole,
+    RunStatus,
+    StepRunStatus,
+    WorkspaceStatus,
+)
 from intelliflow.core.masking import mask_pii
-from intelliflow.integrations.connectors.base import SandboxRecorder
-from intelliflow.integrations.connectors.registry import ConnectorFactory
+from intelliflow.core.models import utcnow
 from intelliflow.engine.blocks.base import (
     ApprovalDecision,
     Block,
@@ -39,23 +48,14 @@ from intelliflow.engine.errors import (
     PermanentBlockError,
     TransientBlockError,
 )
+from intelliflow.integrations.connectors.base import SandboxRecorder
+from intelliflow.integrations.connectors.registry import ConnectorFactory
 from intelliflow.llm.base import LLMClient
-from intelliflow.approvals.models import ApprovalTask
-from intelliflow.automations.models import Automation
+from intelliflow.llm.service import AIService
+from intelliflow.notifications import event_bus
+from intelliflow.notifications.services import notify, workspace_members
 from intelliflow.runs.models import Run, StepRun
 from intelliflow.workspaces.models import Workspace
-from intelliflow.core.models import utcnow
-from intelliflow.core.enums import (
-    ApprovalStatus,
-    AutomationStatus,
-    MembershipRole,
-    RunStatus,
-    StepRunStatus,
-    WorkspaceStatus,
-)
-from intelliflow.notifications import event_bus
-from intelliflow.llm.service import AIService
-from intelliflow.notifications.services import notify, workspace_members
 
 logger = logging.getLogger(__name__)
 
@@ -229,7 +229,9 @@ class WorkflowEngine:
                 step_run.save()
                 run.save()
                 scheduler, run_id = self.scheduler, run.id
-                transaction.on_commit(lambda: scheduler(run_id, delay))
+                transaction.on_commit(
+                    lambda s=scheduler, r=run_id, d=delay: s(r, d)  # bind now, run after commit
+                )
                 return run
             except ConnectionUnavailableError as exc:
                 return self._fail(run, step_run, exc.message, ctx, connection_problem=True)

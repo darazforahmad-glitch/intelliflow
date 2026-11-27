@@ -8,16 +8,16 @@ from django.conf import settings
 from django.db import transaction
 from jsonschema import Draft202012Validator
 
+from intelliflow.accounts.models import User
+from intelliflow.audit import services as audit_service
+from intelliflow.core.enums import InterviewStatus, MessageSender
 from intelliflow.core.errors import ConflictError, ServiceUnavailableError, ValidationFailedError
+from intelliflow.flowmapper.models import InterviewMessage, InterviewSession
 from intelliflow.llm import output_schemas, prompts
 from intelliflow.llm.base import LLMError, LLMUnavailableError
 from intelliflow.llm.heuristics import detect_language
-from intelliflow.accounts.models import User
-from intelliflow.flowmapper.models import InterviewMessage, InterviewSession
-from intelliflow.workspaces.models import Workspace
-from intelliflow.core.enums import InterviewStatus, MessageSender
-from intelliflow.audit import services as audit_service
 from intelliflow.llm.service import AIService
+from intelliflow.workspaces.models import Workspace
 
 _TURN_VALIDATOR = Draft202012Validator(output_schemas.INTERVIEW_TURN)
 MAX_ANSWER_CHARS = 4000

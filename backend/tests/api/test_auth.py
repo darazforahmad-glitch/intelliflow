@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-
 from tests.conftest import Client, latest_link, register_and_login
 
 

@@ -68,9 +68,7 @@ def outbox(connection_id: Any) -> list[dict[str, Any]]:
     ]
 
 
-def test_order_run_pauses_for_confirmation_then_sends(
-    order_setup: dict[str, Any]
-) -> None:
+def test_order_run_pauses_for_confirmation_then_sends(order_setup: dict[str, Any]) -> None:
     run = start(order_setup["automation"])
     assert run.status == RunStatus.WAITING_APPROVAL
     steps = {s.step_key: s for s in StepRun.objects.filter(run_id=run.id)}
@@ -86,13 +84,11 @@ def test_order_run_pauses_for_confirmation_then_sends(
     task = open_task(run)
     assert task.payload_json["proposed_action"]["params"]["to"] == "923001234567"
     assert "Ayesha" in task.payload_json["proposed_action"]["params"]["text"]
-    assert (
-        Notification.objects.filter(kind="approval.created").first()
-        is not None
-    )  # REQ-AP-2
+    assert Notification.objects.filter(kind="approval.created").first() is not None  # REQ-AP-2
     assert outbox(order_setup["whatsapp"].id) == []  # nothing sent before approval (SAF-1)
 
-    approval_service.decide(task, order_setup["owner"], "approve"
+    approval_service.decide(
+        task, order_setup["owner"], "approve"
     )  # resumes through the (eager) task queue
     run = Run.objects.get(pk=run.id)
     assert run.status == RunStatus.SUCCEEDED
@@ -108,38 +104,30 @@ def test_non_order_stops_at_condition(order_setup: dict[str, Any]) -> None:
     assert "condition was not met" in (run.summary or "")
 
 
-def test_large_order_needs_money_approval_before_saving(
-    order_setup: dict[str, Any]
-) -> None:
+def test_large_order_needs_money_approval_before_saving(order_setup: dict[str, Any]) -> None:
     text = ORDER_TEXT.replace("Total Rs 4500", "Total Rs 15,000")
     run = start(order_setup["automation"], whatsapp_trigger(text))
     task = open_task(run)
     assert task.kind == "money"
-    assert (
-        list(SandboxRecord.objects.filter(resource="sheet:Orders"))
-        == []
-    )
+    assert list(SandboxRecord.objects.filter(resource="sheet:Orders")) == []
     approval_service.decide(task, order_setup["owner"], "approve")
     second = open_task(run)
     assert second.kind == "customer_message"
-    assert (
-        len(list(SandboxRecord.objects.filter(resource="sheet:Orders")))
-        == 1
-    )
+    assert len(list(SandboxRecord.objects.filter(resource="sheet:Orders"))) == 1
 
 
-def test_edit_changes_text_but_never_the_recipient(
-    order_setup: dict[str, Any]
-) -> None:
+def test_edit_changes_text_but_never_the_recipient(order_setup: dict[str, Any]) -> None:
     from intelliflow.core.errors import ValidationFailedError
 
     run = start(order_setup["automation"])
     task = open_task(run)
     with pytest.raises(ValidationFailedError):
-        approval_service.decide(task, order_setup["owner"], "edit", edited_params={"to": "923339999999"}
+        approval_service.decide(
+            task, order_setup["owner"], "edit", edited_params={"to": "923339999999"}
         )
     task = open_task(run)
-    approval_service.decide(task, order_setup["owner"], "edit", edited_params={"text": "Shukriya! Order confirm."}
+    approval_service.decide(
+        task, order_setup["owner"], "edit", edited_params={"text": "Shukriya! Order confirm."}
     )
     assert Run.objects.get(pk=run.id).status == RunStatus.SUCCEEDED
     assert outbox(order_setup["whatsapp"].id)[0]["text"] == "Shukriya! Order confirm."
@@ -209,10 +197,7 @@ def test_five_consecutive_failures_pause_the_automation(
     automation = Automation.objects.get(pk=automation.id)
     assert automation.status == AutomationStatus.ERROR  # REQ-WE-7
     assert "5 failed runs" in (automation.status_reason or "")
-    assert (
-        Notification.objects.filter(kind="automation.error").first()
-        is not None
-    )
+    assert Notification.objects.filter(kind="automation.error").first() is not None
     # A new event for a paused automation does not run.
     engine = WorkflowEngine()
     trigger = whatsapp_trigger()
@@ -248,15 +233,14 @@ def test_incomplete_extraction_goes_to_review(order_setup: dict[str, Any]) -> No
     with pytest.raises(ValidationFailedError):  # cannot approve while a required field is empty
         approval_service.decide(task, order_setup["owner"], "approve")
     task = open_task(run)
-    approval_service.decide(task, order_setup["owner"], "edit", edited_fields={"address": "House 7, DHA Lahore"}
+    approval_service.decide(
+        task, order_setup["owner"], "edit", edited_fields={"address": "House 7, DHA Lahore"}
     )
     row = SandboxRecord.objects.get(resource="sheet:Orders")
     assert row.data_json["Address"] == "House 7, DHA Lahore"
 
 
-def test_test_runs_auto_approve_and_persist_nothing(
-    order_setup: dict[str, Any]
-) -> None:
+def test_test_runs_auto_approve_and_persist_nothing(order_setup: dict[str, Any]) -> None:
     engine = WorkflowEngine(retry_mode=RetryMode.INLINE, sleep=lambda _s: None)
     trigger = whatsapp_trigger()
     run = engine.create_run(
@@ -279,9 +263,7 @@ def test_test_runs_auto_approve_and_persist_nothing(
         "confirm",
     ]
     assert engine.trace[-1]["output"]["decision"] == "approved_in_test"
-    assert (
-        list(SandboxRecord.objects.all()) == []
-    )  # SAF-5: nothing persisted, nobody messaged
+    assert list(SandboxRecord.objects.all()) == []  # SAF-5: nothing persisted, nobody messaged
     assert any(r["operation"] == "send_text" for r in engine.recorder.records)
 
 
@@ -308,8 +290,8 @@ def test_step_logs_mask_personal_data(order_setup: dict[str, Any]) -> None:
     step = StepRun.objects.get(run_id=run.id, step_key="save_row")
     logged = str(step.input_json)
     assert "923001234567" not in logged and "Gulberg" not in logged  # REQ-WE-6
-    assert (
-        run.context_encrypted is not None and b"Gulberg" not in bytes(run.context_encrypted)
+    assert run.context_encrypted is not None and b"Gulberg" not in bytes(
+        run.context_encrypted
     )  # encrypted at rest
 
 

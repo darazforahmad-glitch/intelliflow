@@ -8,15 +8,15 @@ from dataclasses import dataclass, field
 from enum import StrEnum
 from typing import TYPE_CHECKING, Any, ClassVar
 
-from intelliflow.engine.expressions import evaluate, render, render_value, resolve_path
 from intelliflow.core.enums import ApprovalKind
+from intelliflow.engine.expressions import evaluate, render, render_value, resolve_path
 
 if TYPE_CHECKING:
-    from intelliflow.integrations.connectors.registry import ConnectorFactory
     from intelliflow.automations.models import Automation
+    from intelliflow.integrations.connectors.registry import ConnectorFactory
+    from intelliflow.llm.service import AIService
     from intelliflow.runs.models import Run
     from intelliflow.workspaces.models import Workspace
-    from intelliflow.llm.service import AIService
 
 
 class BlockStatus(StrEnum):

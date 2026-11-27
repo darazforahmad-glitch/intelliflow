@@ -6,6 +6,7 @@ from typing import Any
 
 from jsonschema import Draft202012Validator
 
+from intelliflow.core.enums import ApprovalKind
 from intelliflow.core.errors import QuotaExceededError
 from intelliflow.engine.blocks.base import (
     ApprovalRequest,
@@ -19,7 +20,6 @@ from intelliflow.engine.errors import PermanentBlockError, TransientBlockError
 from intelliflow.llm import output_schemas, prompts
 from intelliflow.llm.base import LLMOutputError, LLMRefusalError, LLMRequest, LLMUnavailableError
 from intelliflow.llm.heuristics import detect_language
-from intelliflow.core.enums import ApprovalKind
 
 LOW_CONFIDENCE = 0.6
 

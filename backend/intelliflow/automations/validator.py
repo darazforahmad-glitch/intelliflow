@@ -11,9 +11,9 @@ from typing import Any
 
 from jsonschema.exceptions import ValidationError
 
-from intelliflow.integrations.connectors.registry import PROVIDER_LABELS, operation_spec
 from intelliflow.engine.blocks.registry import BLOCK_LIBRARY
 from intelliflow.engine.expressions import ExpressionError, expression_references, value_references
+from intelliflow.integrations.connectors.registry import PROVIDER_LABELS, operation_spec
 from intelliflow.jsonschemas import WORKFLOW, validator_for
 
 RESERVED_ROOTS = frozenset({"trigger", "run", "workspace"})

@@ -12,11 +12,11 @@ from decimal import ROUND_HALF_UP, Decimal
 
 from django.db import transaction
 
-from intelliflow.llm.heuristics import has_any, normalize, tokens
 from intelliflow.automations.models import Template
-from intelliflow.flowmapper.models import ProcessMap, ProcessStep
-from intelliflow.opportunities.models import Opportunity
 from intelliflow.core.enums import OpportunityStatus, StepType
+from intelliflow.flowmapper.models import ProcessMap, ProcessStep
+from intelliflow.llm.heuristics import has_any, normalize, tokens
+from intelliflow.opportunities.models import Opportunity
 
 FIT_EXACT = Decimal("1.0")
 FIT_PARTIAL = Decimal("0.6")

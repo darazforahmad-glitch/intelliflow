@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from typing import Any
 
-
 from intelliflow.accounts.models import User
 from tests.api.test_webhooks import ORDER, active_order_automation, post_whatsapp, whatsapp_phone_id
 from tests.conftest import Api, register_and_login

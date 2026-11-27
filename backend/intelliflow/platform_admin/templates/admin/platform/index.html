@@ -1,0 +1,33 @@
+{% extends "admin/index.html" %}
+{% comment %}Platform metrics (REQ-PA-2) above the model list. Aggregates only (BR-8).{% endcomment %}
+{% block extrastyle %}{{ block.super }}
+<style>
+  .if-metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; margin: 0 0 20px; }
+  .if-card { border: 1px solid var(--hairline-color); border-radius: 6px; padding: 12px 14px; background: var(--body-bg); }
+  .if-card .label { color: var(--body-quiet-color); font-size: 0.8rem; text-transform: uppercase; letter-spacing: .04em; }
+  .if-card .value { font-size: 1.6rem; font-weight: 600; margin-top: 4px; }
+  .if-card .note { color: var(--body-quiet-color); font-size: 0.8rem; margin-top: 2px; }
+  .if-chart { display: flex; align-items: flex-end; gap: 4px; height: 90px; margin-top: 8px; }
+  .if-bar { flex: 1; background: var(--primary); border-radius: 2px 2px 0 0; min-height: 2px; position: relative; }
+  .if-bar.failed { background: var(--error-fg); }
+  .if-days { display: flex; gap: 4px; font-size: 0.7rem; color: var(--body-quiet-color); }
+  .if-days span { flex: 1; text-align: center; }
+</style>
+{% endblock %}
+{% block content %}
+<div class="if-metrics">
+  <div class="if-card"><div class="label">Active workspaces</div><div class="value">{{ metrics.workspaces.active }}</div><div class="note">{{ metrics.workspaces.suspended }} suspended</div></div>
+  <div class="if-card"><div class="label">Users</div><div class="value">{{ metrics.users }}</div></div>
+  <div class="if-card"><div class="label">Active automations</div><div class="value">{{ metrics.active_automations }}</div></div>
+  <div class="if-card"><div class="label">Failure rate (7 days)</div><div class="value">{% if metrics.failure_rate_7d is None %}–{% else %}{{ metrics.failure_rate_7d }}%{% endif %}</div></div>
+  <div class="if-card"><div class="label">LLM this month</div><div class="value">${{ metrics.llm_month.cost_usd }}</div><div class="note">{{ metrics.llm_month.calls }} calls · {{ metrics.llm_month.input_tokens }} in / {{ metrics.llm_month.output_tokens }} out tokens</div></div>
+</div>
+<div class="if-card" style="margin-bottom: 20px">
+  <div class="label">Runs per day (last 14 days, failed in red)</div>
+  <div class="if-chart" role="img" aria-label="Runs per day">
+    {% for day in metrics.runs_per_day %}<div class="if-bar{% if day.failed %} failed{% endif %}" style="height: {{ day.height }}%" title="{{ day.date }}: {{ day.runs }} runs, {{ day.failed }} failed"></div>{% endfor %}
+  </div>
+  <div class="if-days">{% for day in metrics.runs_per_day %}<span>{{ day.date|slice:"8:" }}</span>{% endfor %}</div>
+</div>
+{{ block.super }}
+{% endblock %}

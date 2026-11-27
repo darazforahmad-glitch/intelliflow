@@ -9,18 +9,18 @@ from typing import Any
 
 from django.db import transaction
 
-from intelliflow.integrations.connectors import customer_window
-from intelliflow.engine.workflow_engine import WorkflowEngine
 from intelliflow.automations.models import Automation
-from intelliflow.integrations.models import Connection
-from intelliflow.runs.models import Run
-from intelliflow.workspaces.models import Workspace
 from intelliflow.core.enums import (
     AutomationStatus,
     ConnectionProvider,
     ConnectionStatus,
     WorkspaceStatus,
 )
+from intelliflow.engine.workflow_engine import WorkflowEngine
+from intelliflow.integrations.connectors import customer_window
+from intelliflow.integrations.models import Connection
+from intelliflow.runs.models import Run
+from intelliflow.workspaces.models import Workspace
 
 logger = logging.getLogger(__name__)
 

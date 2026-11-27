@@ -49,15 +49,15 @@ data masked in logs, 30-day purge · SEC-9 customer text is data, never code (no
 
 | Algorithm | Where |
 | --- | --- |
-| 5.1 Process interview & map generation | [`interview_agent.py`](backend/app/services/interview_agent.py), [`process_mapper.py`](backend/app/services/process_mapper.py) |
-| 5.2 Opportunity scoring & ranking | [`opportunity_analyzer.py`](backend/app/services/opportunity_analyzer.py) — `score = weekly_minutes × fit × (1 − 0.5 × min(risk, 1))` |
-| 5.3 Automation generation with validation & repair | [`automation_builder.py`](backend/app/services/automation_builder.py), [`workflow_validator.py`](backend/app/services/workflow_validator.py) |
-| 5.4 Webhook handling | [`webhook_gateway.py`](backend/app/services/webhook_gateway.py) |
-| 5.5 Workflow execution with retries & approvals | [`workflow_engine.py`](backend/app/engine/workflow_engine.py), [`blocks/`](backend/app/engine/blocks) |
+| 5.1 Process interview & map generation | [`interview_agent.py`](backend/intelliflow/flowmapper/interview_agent.py), [`process_mapper.py`](backend/intelliflow/flowmapper/process_mapper.py) |
+| 5.2 Opportunity scoring & ranking | [`analyzer.py`](backend/intelliflow/opportunities/analyzer.py) — `score = weekly_minutes × fit × (1 − 0.5 × min(risk, 1))` |
+| 5.3 Automation generation with validation & repair | [`builder.py`](backend/intelliflow/automations/builder.py), [`validator.py`](backend/intelliflow/automations/validator.py) |
+| 5.4 Webhook handling | [`gateway.py`](backend/intelliflow/integrations/gateway.py) |
+| 5.5 Workflow execution with retries & approvals | [`workflow_engine.py`](backend/intelliflow/engine/workflow_engine.py), [`blocks/`](backend/intelliflow/engine/blocks) |
 
-Process maps and workflows are validated against [`process_map.schema.json`](backend/app/jsonschemas/process_map.schema.json)
-and [`workflow.schema.json`](backend/app/jsonschemas/workflow.schema.json); the shared template library (including
-Listing 5.1, *Order entry from WhatsApp*) is in [`seeds/templates.py`](backend/app/seeds/templates.py).
+Process maps and workflows are validated against [`process_map.schema.json`](backend/intelliflow/jsonschemas/process_map.schema.json)
+and [`workflow.schema.json`](backend/intelliflow/jsonschemas/workflow.schema.json); the shared template library (including
+Listing 5.1, *Order entry from WhatsApp*) is in [`seeds.py`](backend/intelliflow/automations/seeds.py).
 
 ## Architecture (Section 4.1)
 
@@ -67,7 +67,7 @@ flowchart LR
     WEB["Next.js web app"]
     PWA["Approvals PWA<br/>service worker + Web Push"]
   end
-  subgraph API["API layer — FastAPI"]
+  subgraph API["API layer — Django + DRF"]
     REST["REST /api/v1<br/>auth · RBAC"]
     GW["Webhook gateway<br/>HMAC · de-dupe"]
     SSE["Server-Sent Events"]
@@ -92,7 +92,7 @@ flowchart LR
   EXT -->|webhooks| GW
 ```
 
-The LLM sits behind a provider-agnostic `LLMClient` ([`app/llm`](backend/app/llm)). Two implementations ship:
+The LLM sits behind a provider-agnostic `LLMClient` ([`intelliflow/llm`](backend/intelliflow/llm)). Two implementations ship:
 `AnthropicLLMClient` (Claude via the official SDK, structured outputs constrained to the JSON schema) and
 `FakeLLMClient`, a deterministic offline stand-in that understands the English and Roman Urdu demo
 scenarios, so tests and demos are repeatable and free.
@@ -102,7 +102,8 @@ scenarios, so tests and demos are repeatable and free.
 | Layer | Technology |
 | --- | --- |
 | Frontend | Next.js 16 (App Router), React 19, TypeScript (strict), Tailwind CSS 4, React Flow, TanStack Query, Zod, Recharts, Workbox service worker + Web Push |
-| Backend | Python 3.12, FastAPI, Uvicorn, Pydantic 2, SQLAlchemy 2 + Alembic, PostgreSQL 16, Celery + Redis 7, jsonschema, httpx, google-auth + Google API client, cryptography, argon2-cffi, PyJWT, pywebpush, Anthropic SDK |
+| Backend | Python 3.12, Django 5.2, Django REST Framework, Gunicorn, Django ORM + migrations, drf-spectacular, djangorestframework-simplejwt, Django Argon2 hasher, PostgreSQL 16, Celery + Redis 7, jsonschema, httpx, google-auth + Google API client, cryptography, pywebpush, Anthropic SDK |
+| Platform Admin | Django admin site (`/admin/`): templates, metrics, AI credit limits, workspace suspension, audit log |
 | Quality | pytest, Playwright, Locust, Ruff, Black, mypy, ESLint, Prettier, GitHub Actions |
 
 ## Run it
@@ -155,17 +156,17 @@ Requires Python 3.12+, Node 20.9+, PostgreSQL 16 and Redis 7 (both optional for 
 ```bash
 cd backend
 python3 -m venv .venv && .venv/bin/pip install -e ".[dev]"
-.venv/bin/alembic upgrade head
-.venv/bin/python -m app.cli seed
-.venv/bin/uvicorn app.main:app --reload
+.venv/bin/python manage.py migrate
+.venv/bin/python manage.py seed
+.venv/bin/python manage.py runserver
 ```
 
 ```bash
-cd backend && .venv/bin/celery -A app.worker.celery_app:celery_app worker -Q intelliflow --loglevel=INFO
+cd backend && .venv/bin/celery -A config worker -Q intelliflow --loglevel=INFO
 ```
 
 ```bash
-cd backend && .venv/bin/celery -A app.worker.celery_app:celery_app beat --loglevel=INFO
+cd backend && .venv/bin/celery -A config beat --loglevel=INFO
 ```
 
 ```bash
@@ -179,14 +180,14 @@ cd frontend && npm install && npm run dev
 Docker Compose loads the demo on first start. Locally, run:
 
 ```bash
-cd backend && .venv/bin/python -m app.cli demo
+cd backend && .venv/bin/python manage.py demo
 ```
 
 This creates **demo@intelliflow.pk / Demo12345** with the *Ayesha Boutique* workspace: a Roman Urdu order-process
 interview, its map and opportunities, an active *Order entry from WhatsApp* automation and a week of runs,
 some waiting for approval. In development, verification e-mails are kept in an outbox — the sign-up page
 shows the link directly. A platform admin can be created with
-`python -m app.cli create-admin --email … --password …`.
+`python manage.py create_admin --email … --password …`; platform admins sign in at <http://localhost:8000/admin/>.
 
 ### Try the journey yourself
 
@@ -205,9 +206,9 @@ shows the link directly. A platform admin can be created with
 | `LLM_PROVIDER=anthropic`, `ANTHROPIC_API_KEY` | Use Claude (default model `claude-opus-5-5`, change with `LLM_MODEL`). |
 | `WHATSAPP_APP_SECRET`, `WHATSAPP_VERIFY_TOKEN` | Meta webhook signature and subscription handshake (`/api/v1/webhooks/whatsapp`). |
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | Google OAuth for Gmail and Sheets (redirect URI `<API_PUBLIC_URL>/api/v1/oauth/google/callback`). |
-| `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` | Web Push for approvals (`python -m app.cli generate-vapid`). |
+| `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` | Web Push for approvals (`python manage.py generate_vapid`). |
 | `EMAIL_BACKEND=smtp`, `SMTP_*` | Send real e-mails instead of the development outbox. |
-| `SECRET_KEY`, `ENCRYPTION_KEYS` | Required outside development (`python -m app.cli generate-keys`); the API refuses to start with the dev defaults. |
+| `SECRET_KEY`, `ENCRYPTION_KEYS` | Required outside development (`python manage.py generate_keys`); the API refuses to start with the dev defaults. |
 
 API documentation (OpenAPI) is served at <http://localhost:8000/api/docs>.
 
@@ -215,9 +216,9 @@ API documentation (OpenAPI) is served at <http://localhost:8000/api/docs>.
 
 | Suite | Command | Result in this build |
 | --- | --- | --- |
-| Backend unit + API tests | `cd backend && .venv/bin/python -m pytest --cov=app` | 77 tests pass on SQLite and on PostgreSQL 16 (`TEST_DATABASE_URL=…`); 83% coverage (gate: 70%); core modules 84–97% |
+| Backend unit + API tests | `cd backend && .venv/bin/python -m pytest --cov` | 79 tests pass on SQLite and on PostgreSQL 16 (`TEST_DATABASE_URL=…`); 83% coverage (gate: 70%) |
 | Static checks | `ruff check app tests && black --check app tests && mypy app` · `npm run lint && npm run typecheck` | clean |
-| Migrations | `alembic upgrade head && alembic check && alembic downgrade base` | round trip clean, no model drift |
+| Migrations | `manage.py migrate && manage.py makemigrations --check` | applies cleanly, no model drift |
 | End to end | `cd frontend && npm run test:e2e` (API on :8000, web on :3000) | owner journey (desktop) and approvals PWA (360 px phone) pass against a real Celery worker |
 | Load | `locust -f loadtests/locustfile.py --host http://localhost:8000 --users 50 --headless --run-time 2m` | 50 users, 1,150 requests, 0 failures; p95: dashboard 220 ms, automations 190 ms, approvals 740 ms, runs 1.2 s (PERF-1: < 2 s); webhook acknowledgement p95 **61 ms** (PERF-2 target: < 1 s) — single VM shared by API, worker, database and web |
 
@@ -225,19 +226,24 @@ API documentation (OpenAPI) is served at <http://localhost:8000/api/docs>.
 
 ```
 backend/
-  app/
-    api/v1/          REST endpoints (auth, workspaces, interviews, process maps, automations,
-                     runs & approvals, connections, dashboard, notifications, webhooks, admin)
-    services/        domain logic (interview, mapping, opportunities, builder, validator,
-                     approvals, connections, webhook gateway, reporting, notifications)
+  config/            Django settings (from environment variables), URLs, WSGI, Celery + Beat
+  intelliflow/       one Django app per module of the report, each with models, services,
+                     serializers, views (DRF viewsets), urls, admin and Celery tasks:
+    accounts/        AC: users, sign-in, JWT (simplejwt), password reset
+    workspaces/      AC: workspaces, members, invitations, kill switch
+    flowmapper/      FM: interview agent, process mapper (Algorithm 5.1)
+    opportunities/   OA: scoring and ranking (Algorithm 5.2)
+    automations/     AB: builder, validator and repair (Algorithm 5.3), template library
+    integrations/    IN: connectors (Adapter pattern), webhook gateway (Algorithm 5.4)
+    runs/            WE: runs, event router, scheduler, Celery tasks
+    approvals/       AP: approval queue and decisions
+    notifications/   in-app, Web Push, e-mail outbox, live-update event bus (SSE)
+    audit/           audit log and LLM usage
+    dashboard/       DR: dashboard figures and CSV report
+    platform_admin/  PA: Django admin site (metrics, suspension, limits, templates)
     engine/          workflow engine, safe expressions, block library (Strategy pattern)
-    connectors/      WhatsApp, Gmail, Google Sheets, web forms (Adapter pattern) + sandbox stores
     llm/             LLMClient, Claude adapter, FakeLLMClient, prompts, output schemas
-    models/          SQLAlchemy models — the data dictionary of Section 4.3
-    jsonschemas/     process-map and workflow JSON Schemas
-    worker/          Celery app, tasks and Beat schedule
-    seeds/           template library
-  alembic/           migrations
+    core/            errors, crypto, masking, permissions, middleware, management commands
   tests/             unit and API tests
   scripts/           webhook simulator
 frontend/

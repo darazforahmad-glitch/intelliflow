@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from intelliflow.core.enums import ApprovalKind
 from intelliflow.engine.blocks.base import (
     ApprovalRequest,
     Block,
@@ -14,7 +15,6 @@ from intelliflow.engine.blocks.base import (
 )
 from intelliflow.engine.errors import PermanentBlockError, WindowClosedError
 from intelliflow.engine.expressions import ExpressionError
-from intelliflow.core.enums import ApprovalKind
 
 
 class ApprovalBlock(Block):

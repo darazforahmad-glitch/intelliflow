@@ -18,9 +18,7 @@ def _logged_paths(caplog: pytest.LogCaptureFixture) -> list[str]:
     ]
 
 
-def test_successful_probes_are_not_logged(
-    client: Client, caplog: pytest.LogCaptureFixture
-) -> None:
+def test_successful_probes_are_not_logged(client: Client, caplog: pytest.LogCaptureFixture) -> None:
     with caplog.at_level(logging.INFO, logger="intelliflow.api"):
         assert client.get("/healthz").json() == {"status": "ok"}
         ready = client.get("/readyz")

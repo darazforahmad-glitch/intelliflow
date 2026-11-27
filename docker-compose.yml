@@ -16,7 +16,7 @@ x-backend: &backend
       required: false
   environment: &backend-env
     ENVIRONMENT: development
-    DATABASE_URL: postgresql+psycopg://intelliflow:intelliflow@postgres:5432/intelliflow
+    DATABASE_URL: postgresql://intelliflow:intelliflow@postgres:5432/intelliflow
     REDIS_URL: redis://redis:6379/0
     CELERY_TASK_ALWAYS_EAGER: "false"
     API_PUBLIC_URL: http://localhost:${API_PORT:-8000}
@@ -66,18 +66,19 @@ services:
       - -c
       - |
         set -e
-        alembic upgrade head
-        python -m app.cli seed
+        python manage.py migrate --noinput
+        python manage.py seed
         if [ "$$SEED_DEMO" = "true" ]; then
-          python -m app.cli demo || echo "WARNING: demo data could not be loaded (see the error above)."
+          python manage.py demo || echo "WARNING: demo data could not be loaded (see the error above)."
         fi
     restart: "no"
 
   api:
     <<: *backend
-    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload --reload-dir /app/app
+    # Django's dev server: reloads on code changes; production uses Gunicorn (image default).
+    command: python manage.py runserver 0.0.0.0:8000
     ports: ["${API_PORT:-8000}:8000"]
-    volumes: ["./backend/app:/app/app"]
+    volumes: ["./backend/intelliflow:/app/intelliflow", "./backend/config:/app/config"]
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/healthz', timeout=4)"]
       interval: 10s
@@ -90,14 +91,14 @@ services:
 
   worker:
     <<: *backend
-    command: celery -A app.worker.celery_app:celery_app worker --loglevel=INFO --concurrency=2 -Q intelliflow
+    command: celery -A config worker --loglevel=INFO --concurrency=2 -Q intelliflow
     depends_on:
       migrate:
         condition: service_completed_successfully
 
   beat:
     <<: *backend
-    command: celery -A app.worker.celery_app:celery_app beat --loglevel=INFO --schedule=/tmp/celerybeat-schedule
+    command: celery -A config beat --loglevel=INFO --schedule=/tmp/celerybeat-schedule
     depends_on:
       migrate:
         condition: service_completed_successfully

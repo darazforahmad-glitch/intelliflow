@@ -223,7 +223,7 @@ if ENVIRONMENT in {"staging", "production"}:
 
 # --- Django ----------------------------------------------------------------------------------------------
 INSTALLED_APPS = [
-    "django.contrib.admin",
+    "intelliflow.platform_admin.admin_config.IntelliFlowAdminConfig",  # Django admin = Platform Admin
     "django.contrib.auth",
     "django.contrib.contenttypes",
     "django.contrib.sessions",

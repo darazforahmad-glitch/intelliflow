@@ -8,8 +8,8 @@ from typing import Any
 from urllib.parse import urlencode
 
 import httpx
-
 from django.conf import settings
+
 from intelliflow.engine.errors import ConnectionUnavailableError
 
 AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth"

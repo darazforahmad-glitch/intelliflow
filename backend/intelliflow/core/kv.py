@@ -14,7 +14,6 @@ from functools import lru_cache
 from typing import Protocol
 
 import redis
-
 from django.conf import settings
 
 logger = logging.getLogger(__name__)

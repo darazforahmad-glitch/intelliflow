@@ -6,16 +6,16 @@ import json
 import re
 from typing import Any
 
+from intelliflow.engine.errors import (
+    ConnectionUnavailableError,
+    PermanentBlockError,
+    TransientBlockError,
+)
 from intelliflow.integrations.connectors.base import Connector, ConnectorContext, OperationSpec
 from intelliflow.integrations.connectors.sheet_store import (
     InMemorySheetStore,
     SheetStore,
     row_matches,
-)
-from intelliflow.engine.errors import (
-    ConnectionUnavailableError,
-    PermanentBlockError,
-    TransientBlockError,
 )
 
 

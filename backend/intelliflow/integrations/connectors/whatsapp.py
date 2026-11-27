@@ -6,16 +6,16 @@ from datetime import datetime
 from typing import Any
 
 import httpx
-
-from intelliflow.integrations.connectors import customer_window
-from intelliflow.integrations.connectors.base import Connector, OperationSpec, normalize_msisdn
 from django.conf import settings
+
 from intelliflow.engine.errors import (
     ConnectionUnavailableError,
     PermanentBlockError,
     TransientBlockError,
     WindowClosedError,
 )
+from intelliflow.integrations.connectors import customer_window
+from intelliflow.integrations.connectors.base import Connector, OperationSpec, normalize_msisdn
 
 
 class WhatsAppConnector(Connector):

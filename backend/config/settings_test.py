@@ -11,9 +11,9 @@ os.environ["EMAIL_BACKEND"] = "console"
 os.environ["REDIS_URL"] = ""
 os.environ["LOGIN_RATE_LIMIT_PER_MINUTE"] = "1000"
 
-import dj_database_url  # noqa: E402
+import dj_database_url
 
-from config.settings import *  # noqa: E402, F403
+from config.settings import *
 
 DATABASES = {
     "default": dj_database_url.parse(
@@ -21,4 +21,4 @@ DATABASES = {
     )
 }
 CELERY_TASK_ALWAYS_EAGER = True
-LOGGING["root"]["level"] = "WARNING"  # noqa: F405
+LOGGING["root"]["level"] = "WARNING"

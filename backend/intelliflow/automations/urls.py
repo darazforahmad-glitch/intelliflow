@@ -6,7 +6,6 @@ from intelliflow.automations.catalog import (
     ConnectorCatalogView,
     TemplateCatalogView,
 )
-
 from intelliflow.automations.views import AutomationViewSet
 from intelliflow.core.api.viewsets import WORKSPACE_PREFIX
 

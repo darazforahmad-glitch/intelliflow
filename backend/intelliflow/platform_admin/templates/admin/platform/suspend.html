@@ -1,0 +1,14 @@
+{% extends "admin/base_site.html" %}
+{% block content %}
+<form method="post">{% csrf_token %}
+  <p>Suspending pauses every automation of these workspaces and blocks their users from signing in (REQ-PA-4):</p>
+  <ul>{% for workspace in workspaces %}<li>{{ workspace.name }}</li>{% endfor %}</ul>
+  <p><label for="reason">Reason (shown in the audit log)</label><br>
+     <textarea id="reason" name="reason" rows="3" cols="60" required minlength="3" maxlength="500"></textarea></p>
+  {% for workspace in workspaces %}<input type="hidden" name="_selected_action" value="{{ workspace.pk }}">{% endfor %}
+  <input type="hidden" name="action" value="suspend_workspaces">
+  <input type="hidden" name="apply" value="1">
+  <input type="submit" value="Suspend">
+  <a href="{{ request.get_full_path }}" class="button cancel-link">Cancel</a>
+</form>
+{% endblock %}

@@ -7,12 +7,12 @@ import re
 from email.message import EmailMessage
 from typing import Any
 
-from intelliflow.integrations.connectors.base import Connector, OperationSpec
 from intelliflow.engine.errors import (
     ConnectionUnavailableError,
     PermanentBlockError,
     TransientBlockError,
 )
+from intelliflow.integrations.connectors.base import Connector, OperationSpec
 
 _EMAIL = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 

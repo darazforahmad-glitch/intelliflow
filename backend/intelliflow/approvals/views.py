@@ -13,9 +13,9 @@ from intelliflow.approvals.serializers import (
     DecisionSerializer,
     approval_out,
 )
+from intelliflow.core.api.viewsets import WorkspaceScopedViewSet
 from intelliflow.core.enums import ApprovalStatus
 from intelliflow.core.errors import NotFoundError
-from intelliflow.core.api.viewsets import WorkspaceScopedViewSet
 
 OPEN_STATES = [ApprovalStatus.PENDING, ApprovalStatus.REMINDED]
 

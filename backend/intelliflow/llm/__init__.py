@@ -5,6 +5,7 @@ from __future__ import annotations
 from functools import lru_cache
 
 from django.conf import settings
+
 from intelliflow.llm.base import LLMClient
 
 _override: LLMClient | None = None

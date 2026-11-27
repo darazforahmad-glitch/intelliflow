@@ -7,7 +7,6 @@ from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 
 import pytest
-
 from django.contrib.auth.hashers import check_password, make_password
 
 from intelliflow.accounts.tokens import decode_token
