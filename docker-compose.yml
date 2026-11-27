@@ -1,5 +1,12 @@
 # Development environment (Section 5.3): PostgreSQL 16, Redis 7, API, Celery worker and
-# Beat, and the web app.  `docker compose up --build`, then open http://localhost:3000
+# Beat, and the web app.
+#
+#   docker compose up --build        then open http://localhost:3000
+#
+# The first start also loads the demo workspace (demo@intelliflow.pk / Demo12345);
+# set SEED_DEMO=false to start empty. PostgreSQL and Redis are only reachable inside the
+# Compose network, so a PostgreSQL or Redis already installed on the machine cannot clash.
+# If port 3000 or 8000 is taken, pick others: WEB_PORT=3100 API_PORT=8100 docker compose up --build
 name: intelliflow
 
 x-backend: &backend
@@ -12,14 +19,17 @@ x-backend: &backend
     DATABASE_URL: postgresql+psycopg://intelliflow:intelliflow@postgres:5432/intelliflow
     REDIS_URL: redis://redis:6379/0
     CELERY_TASK_ALWAYS_EAGER: "false"
-    API_PUBLIC_URL: http://localhost:8000
-    FRONTEND_URL: http://localhost:3000
-    CORS_ORIGINS: http://localhost:3000
+    API_PUBLIC_URL: http://localhost:${API_PORT:-8000}
+    FRONTEND_URL: http://localhost:${WEB_PORT:-3000}
+    CORS_ORIGINS: http://localhost:${WEB_PORT:-3000}
   depends_on:
     postgres:
       condition: service_healthy
     redis:
       condition: service_healthy
+  # The image's health check probes the HTTP API; only the api service serves it.
+  healthcheck:
+    disable: true
   restart: unless-stopped
 
 services:
@@ -29,31 +39,51 @@ services:
       POSTGRES_USER: intelliflow
       POSTGRES_PASSWORD: intelliflow
       POSTGRES_DB: intelliflow
-    ports: ["5432:5432"]
     volumes: [pgdata:/var/lib/postgresql/data]
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U intelliflow -d intelliflow"]
       interval: 5s
       retries: 10
+    restart: unless-stopped
 
   redis:
     image: redis:7-alpine
-    ports: ["6379:6379"]
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
       retries: 10
+    restart: unless-stopped
 
+  # One-off: migrations, template library and (first start only) the demo workspace.
+  # A failed demo load is reported but does not stop the app from starting.
   migrate:
     <<: *backend
-    command: sh -c "alembic upgrade head && python -m app.cli seed"
+    environment:
+      <<: *backend-env
+      SEED_DEMO: ${SEED_DEMO:-true}
+    command:
+      - sh
+      - -c
+      - |
+        set -e
+        alembic upgrade head
+        python -m app.cli seed
+        if [ "$$SEED_DEMO" = "true" ]; then
+          python -m app.cli demo || echo "WARNING: demo data could not be loaded (see the error above)."
+        fi
     restart: "no"
 
   api:
     <<: *backend
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload --reload-dir /app/app
-    ports: ["8000:8000"]
+    ports: ["${API_PORT:-8000}:8000"]
     volumes: ["./backend/app:/app/app"]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/healthz', timeout=4)"]
+      interval: 10s
+      timeout: 5s
+      start_period: 20s
+      retries: 5
     depends_on:
       migrate:
         condition: service_completed_successfully
@@ -76,8 +106,9 @@ services:
     build:
       context: ./frontend
       args:
-        NEXT_PUBLIC_API_URL: http://localhost:8000
-    ports: ["3000:3000"]
+        NEXT_PUBLIC_API_URL: http://localhost:${API_PORT:-8000}
+    command: ["sh", "-c", "echo 'IntelliFlow is ready: open http://localhost:${WEB_PORT:-3000}' && exec node server.js"]
+    ports: ["${WEB_PORT:-3000}:3000"]
     depends_on: [api]
     restart: unless-stopped
 

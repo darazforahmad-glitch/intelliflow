@@ -109,16 +109,43 @@ scenarios, so tests and demos are repeatable and free.
 
 ### Option A — Docker Compose
 
+Needs Docker with Compose 2.24 or newer (`docker compose version`).
+
 ```bash
-cp .env.example .env
 docker compose up --build
 ```
 
-Then load the demo workspace (optional) and open <http://localhost:3000>:
+The first build downloads and compiles everything and takes several minutes. Keep that terminal open:
+the app runs for as long as the command does, and <kbd>Ctrl</kbd>+<kbd>C</kbd> stops it. When the log prints
+`IntelliFlow is ready`, open <http://localhost:3000> and sign in with **demo@intelliflow.pk / Demo12345**.
+The first start loads that demo workspace automatically (`SEED_DEMO=false docker compose up --build` starts
+empty). To run in the background instead, use `docker compose up --build -d` and stop it with
+`docker compose down`.
+
+Copying `.env.example` to `.env` is optional; do it to switch on the real services listed below.
+
+#### If it does not start
 
 ```bash
-docker compose exec api python -m app.cli demo
+docker compose ps -a
 ```
+
+Every service except `migrate` should show `Up`, and `migrate` should show `Exited (0)`. If something else
+appears, the reason is in its log, for example:
+
+```bash
+docker compose logs migrate api
+```
+
+| Message | Fix |
+| --- | --- |
+| `service "api" is not running` | The stack is not up: it is still building, it was stopped with Ctrl+C, or a service failed (see `docker compose ps -a`). Start it with `docker compose up --build`. |
+| `port is already allocated` / `address already in use` for 3000 or 8000 | Another program uses the port. Pick free ones: `WEB_PORT=3100 API_PORT=8100 docker compose up --build`, then open <http://localhost:3100>. |
+| `permission denied ... docker.sock` | Your user is not in the `docker` group: run `sudo usermod -aG docker $USER`, log out and back in. |
+| An error about `env_file` before anything starts | Compose is older than 2.24: update Docker. |
+
+PostgreSQL and Redis run inside the Compose network only, so copies already installed on your machine do not
+clash with them. `docker compose down -v` deletes the database too, for a completely fresh start.
 
 ### Option B — locally
 
@@ -148,6 +175,8 @@ cd frontend && npm install && npm run dev
 (Set `CELERY_TASK_ALWAYS_EAGER=true` to run tasks inside the API process instead of a worker.)
 
 ### Demo data and accounts
+
+Docker Compose loads the demo on first start. Locally, run:
 
 ```bash
 cd backend && .venv/bin/python -m app.cli demo
