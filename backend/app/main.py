@@ -24,6 +24,9 @@ from app.core.logging import configure_logging, request_id_var
 
 logger = logging.getLogger("intelliflow.api")
 
+# Container health probes hit these every few seconds; only failures are worth a log line.
+_PROBE_PATHS = frozenset({"/healthz", "/readyz"})
+
 
 def _friendly_validation_errors(exc: RequestValidationError) -> list[dict[str, Any]]:
     details = []
@@ -84,16 +87,17 @@ def create_app() -> FastAPI:
             response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
         if request.url.path.startswith("/api/v1") and "cache-control" not in response.headers:
             response.headers["Cache-Control"] = "no-store"
-        logger.info(
-            "request",
-            extra={
-                "method": request.method,
-                "path": request.url.path,
-                "status": response.status_code,
-                "duration_ms": elapsed_ms,
-                "request_id": request_id,
-            },
-        )
+        if request.url.path not in _PROBE_PATHS or response.status_code >= 400:
+            logger.info(
+                "request",
+                extra={
+                    "method": request.method,
+                    "path": request.url.path,
+                    "status": response.status_code,
+                    "duration_ms": elapsed_ms,
+                    "request_id": request_id,
+                },
+            )
         return response
 
     @app.exception_handler(AppError)
