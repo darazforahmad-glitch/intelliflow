@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://intelliflow.app/schemas/process-map.schema.json",
+  "title": "IntelliFlow process map (REQ-FM-4)",
+  "type": "object",
+  "required": ["process_name", "language", "steps"],
+  "additionalProperties": false,
+  "properties": {
+    "process_name": { "type": "string", "minLength": 1, "maxLength": 120 },
+    "language": { "type": "string", "enum": ["en", "ur", "roman-ur"] },
+    "steps": {
+      "type": "array",
+      "minItems": 3,
+      "maxItems": 40,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "key", "title", "actor", "action", "step_type", "app", "minutes_per_run",
+          "runs_per_week", "predecessor", "involves_customer_messaging", "involves_money"
+        ],
+        "properties": {
+          "key": { "type": "string", "pattern": "^s[0-9]{1,3}$", "description": "Stable step id: s1, s2, ..." },
+          "title": { "type": "string", "minLength": 2, "maxLength": 150, "description": "Short English title" },
+          "actor": { "type": "string", "minLength": 1, "maxLength": 80, "description": "Who does it: Owner, Staff, Customer, Courier, System" },
+          "action": { "type": "string", "maxLength": 1000, "description": "What happens, in the owner's words" },
+          "step_type": { "type": "string", "enum": ["start", "manual", "automated", "human_only", "end"] },
+          "app": {
+            "type": "string",
+            "enum": ["whatsapp", "excel", "google_sheets", "gmail", "paper", "phone", "webform", "website", "bank", "courier", "pos", "other", "none"]
+          },
+          "minutes_per_run": { "type": "number", "minimum": 0, "maximum": 600 },
+          "runs_per_week": { "type": "integer", "minimum": 0, "maximum": 10000 },
+          "predecessor": { "anyOf": [{ "type": "string" }, { "type": "null" }] },
+          "involves_customer_messaging": { "type": "boolean" },
+          "involves_money": { "type": "boolean" }
+        }
+      }
+    }
+  }
+}
