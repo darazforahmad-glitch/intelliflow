@@ -352,8 +352,10 @@ def upgrade() -> None:
     )
     op.create_index(op.f('ix_automation_versions_automation_id'), 'automation_versions', ['automation_id'], unique=False)
     # automations <-> automation_versions reference each other: add this FK last.
-    op.create_foreign_key(op.f('fk_automations_current_version_id_automation_versions'), 'automations',
-                          'automation_versions', ['current_version_id'], ['id'], ondelete='SET NULL')
+    # Batch mode: a plain ALTER on PostgreSQL, copy-and-move on SQLite.
+    with op.batch_alter_table('automations') as batch:
+        batch.create_foreign_key(op.f('fk_automations_current_version_id_automation_versions'),
+                                 'automation_versions', ['current_version_id'], ['id'], ondelete='SET NULL')
     op.create_table('runs',
     sa.Column('automation_id', sa.Uuid(), nullable=False),
     sa.Column('version_id', sa.Uuid(), nullable=False),
@@ -431,7 +433,8 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    op.drop_constraint(op.f('fk_automations_current_version_id_automation_versions'), 'automations', type_='foreignkey')
+    with op.batch_alter_table('automations') as batch:
+        batch.drop_constraint(op.f('fk_automations_current_version_id_automation_versions'), type_='foreignkey')
     op.drop_index('ix_approval_tasks_workspace_status', table_name='approval_tasks')
     op.drop_index(op.f('ix_approval_tasks_step_run_id'), table_name='approval_tasks')
     op.drop_index(op.f('ix_approval_tasks_run_id'), table_name='approval_tasks')

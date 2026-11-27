@@ -511,7 +511,13 @@ def _field_value(name: str, text: str, ctx: dict[str, Any]) -> Any:
             r"\b(\d{1,3})\s*(?:x\s*)?([a-zA-Z][a-zA-Z]+(?:\s(?!size|colou?r|rang)[a-zA-Z]+)?)", text
         )
         if match and match.group(2).lower().split()[0] not in _ITEM_STOP:
-            words = [w for w in match.group(2).split() if w.lower() not in _ITEM_FILLER]
+            words = [
+                w
+                for w in match.group(2).split()
+                if w.lower() not in _ITEM_FILLER
+                and w.lower() not in _SIZES
+                and w.lower() not in _COLOURS
+            ]
             return f"{match.group(1)} {' '.join(words)}".strip()
         match = re.search(
             r"(?:mujhe|i want|i need|chahiye)\s+([a-zA-Z ]{3,40}?)(?:\s+chahiye|[,.]|$)",
